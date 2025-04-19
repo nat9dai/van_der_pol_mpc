@@ -35,16 +35,15 @@ options = optimoptions('fmincon', 'Display', 'off');
 % Initialize arrays to store results
 x_trajectory_mpc = [];
 x_trajectory_lifted_mpc = [];
-% x_trajectory_lifted_mpc_chopped = [];
+
 u_trajectory_mpc = [];
 u_trajectory_lifted_mpc = [];
-% u_trajectory_lifted_mpc_chopped = [];
+
 time_vector = (0:simulation_step - 1) * dt_sim; % Create a time vector
 
 % Initialize two separate states for each controller
 x0_mpc = x0;
 x0_lifted = x0;
-% x0_lifted_chopped = x0;
 
 % state params
 x1_lb = -0.1;
@@ -65,35 +64,25 @@ for t = 1:simulation_step
                        @(u) nonlinear_constraints(u, x0_lifted, dt_controller, x1_lb, x1_ub, x2_lb), options);
         u_lifted = u_opt_lifted(1);
 
-        % % Lifted MPC controller (chopped)
-        % u_opt_lifted_chopped = fmincon(@(u) lifted_cost_function_chopped(u, x0_lifted_chopped, x_ref, dt_controller), u_opt_lifted_chopped, [], [], [], [], lb_chopped, ub_chopped, @(u) nonlinear_constraints(u, x0_lifted_chopped), options);
-        % u_lifted_chopped = u_opt_lifted_chopped(1);
     end
     x_next_mpc = rk4(@(x, u) nonlinear_dynamics(x, u), x0_mpc, u_mpc, dt_sim);
     x_next_lifted = rk4(@(x, u) nonlinear_dynamics(x, u), x0_lifted, u_lifted, dt_sim);
-    % x_next_lifted_chopped = rk4(@(x, u) nonlinear_dynamics(x, u), x0_lifted_chopped, u_lifted_chopped, dt_sim);
 
     % Update initial state for next iteration
     x0_mpc = x_next_mpc;
     x0_lifted = x_next_lifted;
-    % x0_lifted_chopped = x_next_lifted_chopped;
 
     x_trajectory_mpc = [x_trajectory_mpc; x0_mpc'];
     u_trajectory_mpc = [u_trajectory_mpc; u_mpc];
     
     x_trajectory_lifted_mpc = [x_trajectory_lifted_mpc; x0_lifted'];
     u_trajectory_lifted_mpc = [u_trajectory_lifted_mpc; u_lifted];
-
-    % x_trajectory_lifted_mpc_chopped = [x_trajectory_lifted_mpc_chopped; x0_lifted_chopped'];
-    % u_trajectory_lifted_mpc_chopped = [u_trajectory_lifted_mpc_chopped; u_lifted_chopped];
 end
 
 figure;
 hold on;
 plot(x_trajectory_mpc(:,1), x_trajectory_mpc(:,2), 'b-', 'LineWidth', 2);
 plot(x_trajectory_lifted_mpc(:,1), x_trajectory_lifted_mpc(:,2), 'r--', 'LineWidth', 2);
-% plot(x_trajectory_lifted_mpc_chopped(:,1), x_trajectory_lifted_mpc_chopped(:,2), 'g-.', 'LineWidth', 2);
-% legend('NMPC', 'Lifted NMPC 1', 'Lifted NMPC 2', 'Location', 'northwest');
 xlabel('x_1');
 ylabel('x_2');
 % Add constraint bounds
@@ -102,16 +91,13 @@ xline(x1_ub,  'k-.', 'LineWidth', 1.5); % x1 upper bound
 yline(x2_lb, 'k-.', 'LineWidth', 1.5); % x2 lower bound
 legend('NMPC', 'Lifted NMPC', 'Location', 'northwest');
 grid on;
-% matlab2tikz('vdp_1.tex');
+matlab2tikz('vdp_1.tex');
 
 % Second Plot: x(1) vs time
 figure;
 hold on;
 plot(time_vector, x_trajectory_mpc(:,1), 'b-', 'LineWidth', 2);
 plot(time_vector, x_trajectory_lifted_mpc(:,1), 'r--', 'LineWidth', 2);
-% plot(time_vector, x_trajectory_lifted_mpc_chopped(:,1), 'g-', 'LineWidth', 2);
-% legend('NMPC', 'Lifted NMPC 1', 'Lifted NMPC 2');
-%title('x_1 vs Time');
 xlabel('Time (s)');
 ylabel('x_1');
 % Add constraint bounds for x1
@@ -119,17 +105,13 @@ yline(x1_lb, 'k-.', 'LineWidth', 1.5);
 yline(x1_ub,  'k-.', 'LineWidth', 1.5);
 legend('NMPC', 'Lifted NMPC');
 grid on;
-% matlab2tikz('vdp_2.tex');
+matlab2tikz('vdp_2.tex');
 
 % Third Plot: x(2) vs time
 figure;
 hold on;
 plot(time_vector, x_trajectory_mpc(:,2), 'b-', 'LineWidth', 2);
 plot(time_vector, x_trajectory_lifted_mpc(:,2), 'r--', 'LineWidth', 2);
-% plot(time_vector, x_trajectory_lifted_mpc_chopped(:,2), 'g-', 'LineWidth', 2);
-% legend('NMPC', 'Lifted NMPC 1', 'Lifted NMPC 2');
-
-%title('x_2 vs Time');
 xlabel('Time (s)');
 ylabel('x_2');
 % Add constraint bounds for x2
@@ -137,25 +119,19 @@ yline(x2_lb, 'k-.', 'LineWidth', 1.5);
 legend('NMPC', 'Lifted NMPC');
 grid on;
 % Convert the plot to TikZ
-% matlab2tikz('vdp_3.tex');
+matlab2tikz('vdp_3.tex');
 
 % Fourth Plot: u vs time
 figure;
 hold on;
 plot(time_vector, u_trajectory_mpc(:), 'b-', 'LineWidth', 2);
 plot(time_vector, u_trajectory_lifted_mpc(:), 'r--', 'LineWidth', 2);
-% plot(time_vector, u_trajectory_lifted_mpc_chopped(:), 'g-', 'LineWidth', 2);
-% legend('NMPC', 'Lifted NMPC 1', 'Lifted NMPC 2');
-%title('x_2 vs Time');
 xlabel('Time (s)');
-ylabel('u');
-% Add constraint bounds for x1
-yline(lb, 'k-.', 'LineWidth', 1.5);
-yline(ub,  'k-.', 'LineWidth', 1.5);
+ylabel('Control Input: \it{u}');
 legend('NMPC', 'Lifted NMPC');
 grid on;
 % Convert the plot to TikZ
-% matlab2tikz('vdp_4.tex');
+matlab2tikz('vdp_4.tex');
 
 
 % Runge-Kutta 4th order numerical integration method
