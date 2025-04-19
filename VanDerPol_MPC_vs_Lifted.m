@@ -39,6 +39,12 @@ x_trajectory_lifted_mpc = [];
 u_trajectory_mpc = [];
 u_trajectory_lifted_mpc = [];
 
+solve_time_mpc = zeros(simulation_step, 1);
+solve_time_lifted = zeros(simulation_step, 1);
+
+prev_solve_mpc = NaN;
+prev_solve_lifted = NaN;
+
 time_vector = (0:simulation_step - 1) * dt_sim; % Create a time vector
 
 % Initialize two separate states for each controller
@@ -52,23 +58,45 @@ x2_lb = -0.4;
 
 for t = 1:simulation_step
     if mod(t, control_interval) == 0
-        % Standard MPC controller
-        u_opt_mpc = fmincon(@(u) cost_function(u, x0_mpc, x_ref, dt_controller),...
-                    u_opt_mpc, [], [], [], [], lb, ub,... 
-                    @(u) nonlinear_constraints(u, x0_mpc, dt_controller, x1_lb, x1_ub, x2_lb), options);
+        % --- Standard MPC ---
+        tic;
+        try
+            u_opt_mpc = fmincon(@(u) cost_function(u, x0_mpc, x_ref, dt_controller),...
+                        u_opt_mpc, [], [], [], [], lb, ub,... 
+                        @(u) nonlinear_constraints(u, x0_mpc, dt_controller, x1_lb, x1_ub, x2_lb), options);
+            solve_time = toc * 1000; % in milliseconds
+        catch
+            solve_time = prev_solve_mpc; % fallback if fmincon fails
+        end
+        prev_solve_mpc = solve_time;
+        solve_time_mpc(t) = solve_time;
         u_mpc = u_opt_mpc(1);
-        
-        % Lifted MPC controller
-        u_opt_lifted = fmincon(@(u) lifted_cost_function(u, x0_lifted, x_ref, dt_controller), ...
-                       u_opt_lifted, [], [], [], [], lb, ub,...
-                       @(u) nonlinear_constraints(u, x0_lifted, dt_controller, x1_lb, x1_ub, x2_lb), options);
-        u_lifted = u_opt_lifted(1);
 
+        % --- Lifted MPC ---
+        tic;
+        try
+            u_opt_lifted = fmincon(@(u) lifted_cost_function(u, x0_lifted, x_ref, dt_controller), ...
+                           u_opt_lifted, [], [], [], [], lb, ub,...
+                           @(u) nonlinear_constraints(u, x0_lifted, dt_controller, x1_lb, x1_ub, x2_lb), options);
+            solve_time = toc * 1000;
+        catch
+            solve_time = prev_solve_lifted;
+        end
+        prev_solve_lifted = solve_time;
+        solve_time_lifted(t) = solve_time;
+
+        u_lifted = u_opt_lifted(1);
+    else
+        % Hold previous solve times
+        solve_time_mpc(t) = prev_solve_mpc;
+        solve_time_lifted(t) = prev_solve_lifted;
     end
+
+    % --- RK4 Integration ---
     x_next_mpc = rk4(@(x, u) nonlinear_dynamics(x, u), x0_mpc, u_mpc, dt_sim);
     x_next_lifted = rk4(@(x, u) nonlinear_dynamics(x, u), x0_lifted, u_lifted, dt_sim);
 
-    % Update initial state for next iteration
+    % --- Update States and Logs ---
     x0_mpc = x_next_mpc;
     x0_lifted = x_next_lifted;
 
@@ -91,7 +119,7 @@ xline(x1_ub,  'k-.', 'LineWidth', 1.5); % x1 upper bound
 yline(x2_lb, 'k-.', 'LineWidth', 1.5); % x2 lower bound
 legend('NMPC', 'Lifted NMPC', 'Location', 'northwest');
 grid on;
-matlab2tikz('vdp_1.tex');
+% matlab2tikz('vdp_1.tex');
 
 % Second Plot: x(1) vs time
 figure;
@@ -105,7 +133,7 @@ yline(x1_lb, 'k-.', 'LineWidth', 1.5);
 yline(x1_ub,  'k-.', 'LineWidth', 1.5);
 legend('NMPC', 'Lifted NMPC');
 grid on;
-matlab2tikz('vdp_2.tex');
+% matlab2tikz('vdp_2.tex');
 
 % Third Plot: x(2) vs time
 figure;
@@ -119,7 +147,7 @@ yline(x2_lb, 'k-.', 'LineWidth', 1.5);
 legend('NMPC', 'Lifted NMPC');
 grid on;
 % Convert the plot to TikZ
-matlab2tikz('vdp_3.tex');
+% matlab2tikz('vdp_3.tex');
 
 % Fourth Plot: u vs time
 figure;
@@ -131,8 +159,17 @@ ylabel('Control Input: \it{u}');
 legend('NMPC', 'Lifted NMPC');
 grid on;
 % Convert the plot to TikZ
-matlab2tikz('vdp_4.tex');
+% matlab2tikz('vdp_4.tex');
 
+figure;
+plot(time_vector, solve_time_mpc, 'b-', 'LineWidth', 2);
+hold on;
+plot(time_vector, solve_time_lifted, 'r-','LineWidth', 2);
+xlabel('Time (s)');
+ylabel('Solve Time (ms)');
+legend('NMPC', 'Lifted NMPC');
+grid on;
+matlab2tikz('vdp_solve_time.tex');
 
 % Runge-Kutta 4th order numerical integration method
 function x_next = rk4(ode, x, u, dt)
